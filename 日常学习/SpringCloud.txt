@@ -1,0 +1,31 @@
+Eureka：服务发现 
+Hystrix：断路器 
+Zuul：智能路由 
+Ribbon：客户端负载均衡 
+Turbine：集群监控 
+Springcloud-config：远程获取配置文件
+
+Docker是一个开源的应用容器引擎，让开发者可以打包他们的应用以及依赖包到一个可移植的容器中，然后发布到任何流行的Linux机器上，也可以实现虚拟化，容器是完全使用沙箱机制，相互之间不会有任何接口。
+OOM 内存溢出
+Eureka：Eureka是Spring Cloud Netflix微服务套件中的一部分，可以与Springboot构建的微服务很容易的整合起来。
+用于服务发现，例如Zookeeper等。
+Ribbon:Ribbon是Netflix公司开源的一个负载均衡的项目.
+Feign:实现声明式REST调用。
+Hystrix ：熔断机制。
+Zuul：网关（负载均衡）
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

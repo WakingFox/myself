@@ -1,0 +1,204 @@
+CA：Certificate Authority（证书颁发机构） 
+CA会下发给Server一个证书，该证书是可被信任的，Server发送数据会Client的时候，
+Client通过校验该证书来检验Server是否合法有效。
+Client如何去校验证书呢？在Client端会存储被信任的证书集合，如果该证书属于该集合，则有效，否则无效，抛出异常。
+为什么要购买证书？（https://blog.csdn.net/fangqun663775/article/details/55189107）
+
+
+HTTPS = HTTP + SSL 
+HTTPS使用的是443端口，而HTTP使用的是80端口。 
+HTTPS与SSL使用x.509数字认证。
+
+Http是无状态、无连接。
+无状态：每个请求之间没有关联
+无连接：请求完成后，断开连接
+客户端在使用HTTPS方式与Web服务器通信时有以下几个步骤。
+
+　　（1）客户使用https的URL访问Web服务器，要求与Web服务器建立SSL连接。（Say Hello)
+
+　　（2）Web服务器收到客户端请求后，会将网站的证书信息（证书中包含公钥）传送一份给客户端。（I got it)
+
+　　（3）客户端的浏览器与Web服务器开始协商SSL连接的安全等级，也就是信息加密的等级。
+
+　　（4）客户端的浏览器根据双方同意的安全等级，建立会话密钥，然后利用网站的公钥将会话密钥加密，并传送给网站。
+
+　　（5）Web服务器利用自己的私钥解密出会话密钥。
+
+　　（6）Web服务器利用会话密钥加密与客户端之间的通信。
+
+https协议对于开发者而言其实只是多了一步证书验证的过程。这个证书正常情况下被jdk/jre/security/cacerts所管理。里面证书包含两种情况：
+
+1、机构所颁发的被认证的证书，这种证书的网站在浏览器访问时https头显示为绿色如百度
+
+ 
+
+2、个人所设定的证书，这种证书的网站在浏览器里https头显示为红色×，且需要点击信任该网站才能继续访问。而点击信任这一步的操作就是我们在java代码访问https网站时区别于http请求需要做的事情。
+
+所以JAVA发送Https请求有两种情况，三种解决办法：
+
+第一种情况：Https网站的证书为机构所颁发的被认证的证书，这种情况下和http请求一模一样，无需做任何改变，用HttpsURLConnection或者HttpURLConnection都可以
+靠谱机构的证书会放到浏览器中，浏览器会帮我们做很多事情。
+
+第二种情况：个人所设定的证书，这种证书默认不被信任，需要我们自己选择信任，信任的办法有两种：
+
+A、将证书导入java的运行环境中
+
+从该网站下载或者从网站开发者出获取证书cacert.crt
+运行命令将证书导入java运行环境：keytool -import -keystore %JAVA_HOME%\jre\lib\security\cacerts -file cacert.crt -alias xxx
+完成。java代码中发送https的请求和http一样，同第一种情况。
+B、忽略证书验证过程，忽略之后任何Https协议网站皆能正常访问，同第一种情况
+C、java代码中加载证书，必须使用HttpsURLConnection方式
+从网站开发者出获取生成证书的密钥库cacert.keystore
+
+public class MyX509TrustManager implements X509TrustManager {  
+    X509TrustManager sunJSSEX509TrustManager;  
+    MyX509TrustManager() throws Exception {  
+        // create a "default" JSSE X509TrustManager.  
+        KeyStore ks = KeyStore.getInstance("JKS");  
+        ks.load(new FileInputStream("cancert.keystore"),  
+                "changeit".toCharArray());  
+        TrustManagerFactory tmf =  
+                TrustManagerFactory.getInstance("SunX509", "SunJSSE");  
+        tmf.init(ks);  
+        TrustManager tms [] = tmf.getTrustManagers();  
+           
+        for (int i = 0; i < tms.length; i++) {  
+            if (tms[i] instanceof X509TrustManager) {  
+                sunJSSEX509TrustManager = (X509TrustManager) tms[i];  
+                return;  
+            }  
+        }      
+        throw new Exception("Couldn't initialize");  
+    }  
+     
+    public void checkClientTrusted(X509Certificate[] chain, String authType)  
+            throws CertificateException {  
+        try {  
+            sunJSSEX509TrustManager.checkClientTrusted(chain, authType);  
+        } catch (CertificateException excep) {  
+            // do any special handling here, or rethrow exception.  
+        }  
+    }  
+     
+    public void checkServerTrusted(X509Certificate[] chain, String authType)  
+            throws CertificateException {  
+        try {  
+            sunJSSEX509TrustManager.checkServerTrusted(chain, authType);  
+        } catch (CertificateException excep) {  
+                 
+        }  
+    }  
+    
+    public X509Certificate[] getAcceptedIssuers() {  
+        return sunJSSEX509TrustManager.getAcceptedIssuers();  
+    }  
+}  
+ 
+
+
+
+
+SSL协议为非对称加密和对称加密的结合，因为非对称加密更安全，对称加密速度快。在握手的过程中用非对称加密，
+在数据传输的过程中使用对称加密。
+
+
+
+
+
+1、不可逆加密，大家最熟悉的一种，md5 sha1就是，加密后就不能解密，只能用于存储密码和校验文件变动，不能用于网络通讯。（其实MD5等是可以解密的，只不过这个时间和开销很大）
+2、可逆对称加密，用一个钥匙把内容加密，只要有这个钥匙的人就可以解密，就像登录windows，要一个密码，只要有密码谁都能登录，但是如果没有这密钥，就很难很难解密，就像破解windows密码需要穷尽一样。
+非常适合网络加密通讯。如果客户和服务器都有着把钥匙，那么通讯过程是保密的，即使通讯内容被截获，看到的也是一堆乱七八糟的加密后的byte，通讯内容是安全的。AES已成为已然成为对称密钥加密中最流行的算法之一。
+3、可逆非对称加密，客户端和服务器通讯的时候，客户端先用非对称加密生成2把随机钥匙，一把叫公钥一把叫密钥，关键就在这里，用这个公钥加密的内容不能用公钥解密，只能用密钥解密，
+客户端把公钥发送给服务器，服务器用这个客户端生成的公钥把某内容加密后返还给客户端，客户端用那把密钥解密。最典型的可逆非对称加密算法是RSA。RSA算法是第一个能同时用于加密和数字签名的算法，也易于理解和操作。
+
+目前为止通用安全算法中仅有MD5被破解。
+RSA/DES/3DES/AES等都是能够加解密的。加密之后用密钥能解密回明文。
+SM4
+SM1为对称加密。其加密强度与AES相当。该算法不公开，调用该算法时，需要通过加密芯片的接口进行调用。
+SM2为非对称加密，基于ECC。该算法已公开。由于该算法基于ECC，故其签名速度与秘钥生成速度都快于RSA。ECC 256位（SM2采用的就是ECC 256位的一种）安全强度比RSA 2048位高，但运算速度快于RSA。
+SM3消息摘要。可以用MD5作为对比理解。该算法已公开。校验结果为256位。
+SM4无线局域网标准的分组数据算法。对称加密，密钥长度和分组长度均为128位。
+
+MD5  SHA1  不可逆加密   验证是否一致。消息摘要算法
+
+AES 可逆对称加密   ；DES（废弃） 加密速度快,适合大量数据，分组DES、三重DES算法；IDEA国际数据加密算法，这种算法是在DES算法的基础上发展出来的，类似于三重DES，和DES一样IDEA也是属于对称密钥算法。
+发展IDEA也是因为感到DES具有密钥太短等缺点，已经过时。IDEA的密钥为128位，这么长的密钥在今后若干年内应该是安全的。；美国国家标准局倡导的AES即将作为新标准取代DES。
+
+RSA 可逆不对称加密  速度慢,只能处理少量数据,优点是公钥即使在不安全的网络上公开,也能保证安全。
+DSA，DSA只是一种算法，和RSA不同之处在于它不能用作加密和解密，也不能进行密钥交换，只用于签名,它比RSA要快很多. ；
+加密、解密、签名、验签
+加密：发送方利用接受方的公钥对要发送的明文进行加密。
+
+解密：接收方利用自己的私钥进行解密。
+
+公钥与私钥是配对的，用公钥加密的文件，只有对应的私钥才能解密，反过来，用私钥加密，用对应的公钥进行解密。
+
+签名：发送方用一个哈希函数从报文文本中生成报文摘要，然后用自己的私钥对摘要进行加密，得到的就是这个报文对应的数字签名，通常来说，发送方会将数字签名和报文原文一并发送接收者，方便接收者进行验签。
+
+验签：接收方得到原始报文和数字签名后，用同一个哈希函数从报文中生成报文摘要A，另外，用发送方提供的公钥对数字签名进行解密，得到摘要B，对比A和B是否相同，就可得知报文有没有被篡改过。
+
+
+
+
+ECC  可逆不对称加密 椭圆曲线密码编码学，数论基础是有限域上的椭圆曲线离散对数问题，相对于RSA 抗攻击性强，CPU 占用少，内容使用少，网络消耗低，加密速度快
+Diffie-Hellman密钥交换算法。甲方将自己的公钥发给乙方，乙方根据甲方发来的公钥，生成自己的公钥和私钥，乙方将自己的公钥发送给甲方，甲方和乙方，生成一样的秘钥。用于加密数据
+
+由于HTTPS的推出受到了很多人的欢迎，在SSL更新到3.0时，IETF对SSL3.0进行了标准化，并添加了少数机制(但是几乎和SSL3.0无差异)，标准化后的IETF更名为TLS1.0(Transport Layer Security 安全传输层协议)，
+可以说TLS就是SSL的新版本3.1，TLS是SSL的继承者
+SSL 是当今世界上应用最为广泛的网络安全技术。SSL：（Secure Socket Layer，安全套接字层）该协议由两层组成：SSL记录协议和SSL握手协议 、SSL警报协议。
+SSH（Secure Shell）是一种非对称加密与对称加密算法相结合的安全网络协议，用于计算机通信加密。
+一个SSH会话的建立过程分为两个阶段：第一阶段，双方沟通并同意建立一个加密连接通道以供后续信息传输用；第二阶段，对请求接入的用户进行身份验证以确定服务器端是否要给该用户开放访问权限。
+
+使用SSH协议进行认证时，首先要建立一个加密通道，此加密通道是一个对称加密的过程，使用同一个密钥进行加密与解密，那么如何使服务器与客户端都能安全地获得这个密钥呢？
+
+第一种方法是，首先服务端会通过非对称加密，产生一个公钥和私钥，在客户端发起请求时，服务端将公钥暴露给客户端（这个公钥可以被任意暴露），客户端在获取公钥后，会先产生一个由256位随机数字组成的会话密钥（这里称为口令），客户端通过公钥将这个口令加密，发送给服务器端，服务器端通过私钥进行解密，获取到通讯口令，之后，客户端和服务端的信息传递，都通过这个口令进行对称的加密。
+由于第一种方法存在数据被窃的可能，因此就有安全性更高的第二种方法。第二种方法使用DH（Diffie-Hellman）密钥交换算法来生成加密信道的密钥。假设有A、B两方，A作为发送者，B作为接收者，通过下面的几个步骤就可以构建出一个只属于双方的密钥口令： 
+1) 首先A、B双方，在通信前构建专属于自己的密钥对，假设分别是公钥A，私钥A，公钥B，私钥B； 
+2) A将自己的公钥A暴露给B，B通过私钥B和公钥A经过一定的运算产生出本地的密钥B； 
+3) 同样，B将自己的公钥B暴露给A，A通过私钥A和公钥B经过一定的运算产生出本地的密钥A； 
+4)最后，这个算法有意思的一点就是，密钥A和密钥B是一致的，这样A、B双方就拥有了一个属于双方的“秘密”口令。
+
+2.用户认证及权限开放
+
+会话加密通道建立后，SSH开始进入用户认证阶段，以登陆远程计算法。认证方式有两种，第一种是“密码认证”，第二种是“公钥认证”。
+
+1) 密码认证 
+在建立了加密通道后，服务器要求客户端输入密码，客户端输入的密码经过上述的通道加密传输给服务器。
+2）ssh公钥私钥认证
+服务器生成随机数 x，并用 客户端公钥 加密后生成结果 S(x)，发送给客户端
+客户端使用 客户端私钥 解密 S(x) 得到 x
+客户端计算 q + x 的 md5 值 n(q+x)，q为上一步得到的会话密钥
+服务器计算 q + x 的 md5 值 m(q+x)
+客户端将 n(q+x) 发送给服务器
+服务器比较 m(q+x) 和 n(q+x)，两者相同则认证成功
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

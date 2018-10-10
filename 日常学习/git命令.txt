@@ -1,0 +1,13 @@
+$ git reflog show dev  查看本地dev分支所有的操作
+$ git reset --hard dev@{4}将所有的状态回复到某个操作点的状态
+$ git reset --hard HEAD~3  撤销
+$ git reset  HEAD~3  将commit的状态回退到3次提交前，本地代码不做改动
+hard  soft   mixed(默认值)区别：hard       working copy、index、HEAD全都还原 
+			soft        只有HEAD还原 
+			mixed     HEAD与index还原 
+
+
+
+
+完全同步的情况下，修改某些文件，然后执行  git    reset  --hard HEAD  ，代码会回退到上一个commit的状态，
+刚才修改的一些文件会发生代码丢失，如何恢复丢失的代码？？
